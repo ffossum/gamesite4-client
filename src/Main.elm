@@ -3,6 +3,7 @@ module Main exposing (Msg(..), main, update, view)
 import Html exposing (Html, button, div, form, input, label, program, text)
 import Html.Attributes exposing (id, type_)
 import Html.Events exposing (onClick, onInput, onSubmit)
+import WebSocket exposing (listen, send)
 
 
 init : ( Model, Cmd Msg )
@@ -25,9 +26,14 @@ type alias Model =
     }
 
 
+type alias Channel =
+    String
+
+
 type Msg
     = NameChange String
     | EnterChat
+    | ReceivedMsg Channel String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -37,22 +43,38 @@ update msg model =
             ( { model | username = name }, Cmd.none )
 
         EnterChat ->
-            ( { model | entered = True }, Cmd.none )
+            ( { model | entered = True }, send websocketUrl model.username )
+
+        ReceivedMsg channel content ->
+            ( model, Cmd.none )
 
 
 
 -- SUBSCRIPTIONS
 
 
+handleMsg : String -> Msg
+handleMsg rawMsg =
+    ReceivedMsg "" ""
+
+
+websocketUrl : String
+websocketUrl =
+    "ws://localhost:9160"
+
+
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.none
+    listen websocketUrl handleMsg
 
 
 view : Model -> Html Msg
 view model =
-    div []
-        [ form [ onSubmit EnterChat ]
+    if model.entered then
+        text ("entered as " ++ toString model.username)
+
+    else
+        form [ onSubmit EnterChat ]
             [ label []
                 [ text "Name: "
                 , input [ id "username", type_ "text", onInput NameChange ] []
@@ -60,9 +82,3 @@ view model =
             , text " "
             , button [ type_ "submit" ] [ text "Enter chat" ]
             ]
-        , div []
-            [ text model.username
-            , text "Entered: "
-            , text (toString model.entered)
-            ]
-        ]
