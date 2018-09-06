@@ -1,14 +1,12 @@
 module Main exposing (Msg(..), main, update, view)
 
-import Browser
-import Debug
-import Html exposing (Html, button, div, form, input, label, text)
+import Html exposing (Html, button, div, form, input, label, program, text)
 import Html.Attributes exposing (id, type_)
 import Html.Events exposing (onClick, onInput, onSubmit)
 
 
-init : () -> ( Model, Cmd Msg )
-init _ =
+init : ( Model, Cmd Msg )
+init =
     ( { username = ""
       , entered = False
       }
@@ -16,8 +14,9 @@ init _ =
     )
 
 
+main : Program Never Model Msg
 main =
-    Browser.element { init = init, update = update, view = view, subscriptions = subscriptions }
+    program { init = init, update = update, view = view, subscriptions = subscriptions }
 
 
 type alias Model =
@@ -55,13 +54,15 @@ view model =
     div []
         [ form [ onSubmit EnterChat ]
             [ label []
-                [ text "Navn: "
+                [ text "Name: "
                 , input [ id "username", type_ "text", onInput NameChange ] []
                 ]
+            , text " "
+            , button [ type_ "submit" ] [ text "Enter chat" ]
             ]
         , div []
             [ text model.username
             , text "Entered: "
-            , text (Debug.toString model.entered)
+            , text (toString model.entered)
             ]
         ]
