@@ -1,6 +1,6 @@
 module Main exposing (Msg(..), main, update, view)
 
-import Dict exposing (Dict)
+import Dict exposing (Dict, insert)
 import Html exposing (Html, button, div, form, input, label, program, text)
 import Html.Attributes exposing (id, type_)
 import Html.Events exposing (onClick, onInput, onSubmit)
@@ -25,20 +25,40 @@ main =
 type alias Model =
     { username : String
     , entered : Bool
-    , channels : Dict String (List String)
+    , channels : Dict String Channel
+    }
+
+
+addChannel : Channel -> Model -> Model
+addChannel ch model =
+    { model | channels = insert ch.name ch model.channels }
+
+
+newChannel : String -> Channel
+newChannel name =
+    { name = name
+    , input = ""
+    , messageLog = []
     }
 
 
 type alias Channel =
+    { name : ChannelName
+    , input : String
+    , messageLog : List String
+    }
+
+
+type alias ChannelName =
     String
 
 
 type Msg
     = NameChange String
     | EnterChat
-    | JoinChannel Channel
-    | ReceivedMsg Channel String
-    | SendMsg Channel String
+    | JoinChannel String
+    | ReceivedMsg ChannelName String
+    | SendMsg ChannelName String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -50,13 +70,13 @@ update msg model =
         EnterChat ->
             ( { model | entered = True }, send websocketUrl model.username )
 
-        JoinChannel channel ->
-            ( model, send websocketUrl ("/join #" ++ channel) )
+        JoinChannel channelName ->
+            ( addChannel (newChannel channelName) model, send websocketUrl ("/join #" ++ channelName) )
 
-        ReceivedMsg channel content ->
+        ReceivedMsg channelName content ->
             ( model, Cmd.none )
 
-        SendMsg channel content ->
+        SendMsg channelName content ->
             ( model, Cmd.none )
 
 
