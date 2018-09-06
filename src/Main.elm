@@ -1,5 +1,6 @@
 module Main exposing (Msg(..), main, update, view)
 
+import Dict exposing (Dict)
 import Html exposing (Html, button, div, form, input, label, program, text)
 import Html.Attributes exposing (id, type_)
 import Html.Events exposing (onClick, onInput, onSubmit)
@@ -10,6 +11,7 @@ init : ( Model, Cmd Msg )
 init =
     ( { username = ""
       , entered = False
+      , channels = Dict.empty
       }
     , Cmd.none
     )
@@ -23,6 +25,7 @@ main =
 type alias Model =
     { username : String
     , entered : Bool
+    , channels : Dict String (List String)
     }
 
 
@@ -33,7 +36,9 @@ type alias Channel =
 type Msg
     = NameChange String
     | EnterChat
+    | JoinChannel Channel
     | ReceivedMsg Channel String
+    | SendMsg Channel String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -45,7 +50,13 @@ update msg model =
         EnterChat ->
             ( { model | entered = True }, send websocketUrl model.username )
 
+        JoinChannel channel ->
+            ( model, send websocketUrl ("/join #" ++ channel) )
+
         ReceivedMsg channel content ->
+            ( model, Cmd.none )
+
+        SendMsg channel content ->
             ( model, Cmd.none )
 
 
@@ -53,9 +64,13 @@ update msg model =
 -- SUBSCRIPTIONS
 
 
-handleMsg : String -> Msg
-handleMsg rawMsg =
-    ReceivedMsg "" ""
+handleMsg : String -> String -> Msg
+handleMsg username rawMsg =
+    if rawMsg == "welcome " ++ username then
+        JoinChannel "finn"
+
+    else
+        ReceivedMsg "" ""
 
 
 websocketUrl : String
@@ -65,13 +80,16 @@ websocketUrl =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    listen websocketUrl handleMsg
+    listen websocketUrl (handleMsg model.username)
 
 
 view : Model -> Html Msg
 view model =
     if model.entered then
-        text ("entered as " ++ toString model.username)
+        div []
+            [ text ("Your name is " ++ model.username)
+            , form [] []
+            ]
 
     else
         form [ onSubmit EnterChat ]
