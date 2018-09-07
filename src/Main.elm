@@ -2,8 +2,9 @@ module Main exposing (Msg(..), main, update, view)
 
 import Dict exposing (Dict, insert)
 import Html exposing (Html, button, div, form, input, label, program, text)
-import Html.Attributes exposing (id, type_)
+import Html.Attributes exposing (id, type_, value)
 import Html.Events exposing (onClick, onInput, onSubmit)
+import Regex
 import WebSocket exposing (listen, send)
 
 
@@ -12,6 +13,7 @@ init =
     ( { username = ""
       , entered = False
       , channels = Dict.empty
+      , maybeChannel = Nothing
       }
     , Cmd.none
     )
@@ -26,6 +28,7 @@ type alias Model =
     { username : String
     , entered : Bool
     , channels : Dict String Channel
+    , maybeChannel : Maybe ChannelName
     }
 
 
@@ -57,6 +60,40 @@ newChannel name =
     }
 
 
+setCurrentChannel : ChannelName -> Model -> Model
+setCurrentChannel ch model =
+    { model | maybeChannel = Just ch }
+
+
+getCurrentChannel : Model -> Maybe Channel
+getCurrentChannel model =
+    case model.maybeChannel of
+        Just ch ->
+            Dict.get ch model.channels
+
+        _ ->
+            Nothing
+
+
+updateChannelInput : ChannelName -> String -> Model -> Model
+updateChannelInput channelName value model =
+    case Dict.get channelName model.channels of
+        Just channel ->
+            let
+                updatedChannel =
+                    { channel | input = value }
+            in
+            addChannel updatedChannel model
+
+        _ ->
+            model
+
+
+clearChannelInput : ChannelName -> Model -> Model
+clearChannelInput channelName =
+    updateChannelInput channelName ""
+
+
 type alias Channel =
     { name : ChannelName
     , input : String
@@ -72,8 +109,10 @@ type Msg
     = NameChange String
     | EnterChat
     | JoinChannel String
+    | ChatInputChange ChannelName String
     | ReceivedMsg ChannelName String
-    | SendMsg ChannelName String
+    | SendMsg ChannelName
+    | NothingHappened
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -85,13 +124,27 @@ update msg model =
         EnterChat ->
             ( { model | entered = True }, send websocketUrl model.username )
 
+        ChatInputChange channelName value ->
+            ( updateChannelInput channelName value model, Cmd.none )
+
         JoinChannel channelName ->
-            ( addChannel (newChannel channelName) model, send websocketUrl ("/join #" ++ channelName) )
+            ( addChannel (newChannel channelName) model
+                |> setCurrentChannel channelName
+            , send websocketUrl ("/join #" ++ channelName)
+            )
 
         ReceivedMsg channelName content ->
             ( addMessageToModel channelName content model, Cmd.none )
 
-        SendMsg channelName content ->
+        SendMsg channelName ->
+            case Dict.get channelName model.channels of
+                Just channel ->
+                    ( clearChannelInput channel.name model, send websocketUrl ("#" ++ channelName ++ " " ++ model.username ++ ": " ++ channel.input) )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        NothingHappened ->
             ( model, Cmd.none )
 
 
@@ -105,7 +158,21 @@ handleMsg username rawMsg =
         JoinChannel "finn"
 
     else
-        ReceivedMsg "" ""
+        let
+            matches =
+                Regex.find Regex.All (Regex.regex "#([^ ]*) (.*)") rawMsg
+        in
+        case matches of
+            [] ->
+                NothingHappened
+
+            match :: _ ->
+                case match.submatches of
+                    [ Just channelName, Just content ] ->
+                        ReceivedMsg channelName content
+
+                    _ ->
+                        NothingHappened
 
 
 websocketUrl : String
@@ -121,10 +188,26 @@ subscriptions model =
 view : Model -> Html Msg
 view model =
     if model.entered then
-        div []
-            [ text ("Your name is " ++ model.username)
-            , form [] []
-            ]
+        case getCurrentChannel model of
+            Just channel ->
+                div []
+                    [ text ("Your name is " ++ model.username)
+                    , div []
+                        (List.map
+                            (\x -> div [] [ text x ])
+                            channel.messageLog
+                        )
+                    , form [ onSubmit (SendMsg channel.name) ]
+                        [ input [ value channel.input, onInput (ChatInputChange channel.name), type_ "text" ] []
+                        , text " "
+                        , button []
+                            [ text "Send"
+                            ]
+                        ]
+                    ]
+
+            _ ->
+                text ""
 
     else
         form [ onSubmit EnterChat ]
