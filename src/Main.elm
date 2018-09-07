@@ -108,10 +108,10 @@ type alias ChannelName =
 type Msg
     = NameChange String
     | EnterChat
-    | JoinChannel String
+    | JoinChannel ChannelName
     | ChatInputChange ChannelName String
     | ReceivedMsg ChannelName String
-    | SendMsg ChannelName
+    | SendMsg ChannelName String
     | NothingHappened
 
 
@@ -136,10 +136,10 @@ update msg model =
         ReceivedMsg channelName content ->
             ( addMessageToModel channelName content model, Cmd.none )
 
-        SendMsg channelName ->
+        SendMsg channelName value ->
             case Dict.get channelName model.channels of
                 Just channel ->
-                    ( clearChannelInput channel.name model, send websocketUrl ("#" ++ channelName ++ " " ++ model.username ++ ": " ++ channel.input) )
+                    ( clearChannelInput channel.name model, send websocketUrl ("#" ++ channelName ++ " " ++ model.username ++ ": " ++ value) )
 
                 _ ->
                     ( model, Cmd.none )
@@ -185,6 +185,29 @@ subscriptions model =
     listen websocketUrl (handleMsg model.username)
 
 
+handleSubmit : ChannelName -> String -> Msg
+handleSubmit ch value =
+    if String.isEmpty (String.trim value) then
+        NothingHappened
+
+    else
+        let
+            matches =
+                Regex.find Regex.All (Regex.regex "/join #([a-zA-Z0-9-_]+)") value
+        in
+        case matches of
+            match :: _ ->
+                case match.submatches of
+                    [ Just channelName ] ->
+                        JoinChannel channelName
+
+                    _ ->
+                        NothingHappened
+
+            _ ->
+                SendMsg ch value
+
+
 view : Model -> Html Msg
 view model =
     if model.entered then
@@ -192,18 +215,18 @@ view model =
             Just channel ->
                 div []
                     [ text ("Your name is " ++ model.username)
-                    , div []
-                        (List.map
-                            (\x -> div [] [ text x ])
-                            channel.messageLog
-                        )
-                    , form [ onSubmit (SendMsg channel.name) ]
+                    , form [ onSubmit (handleSubmit channel.name channel.input) ]
                         [ input [ value channel.input, onInput (ChatInputChange channel.name), type_ "text" ] []
                         , text " "
                         , button []
                             [ text "Send"
                             ]
                         ]
+                    , div []
+                        (List.map
+                            (\x -> div [] [ text x ])
+                            channel.messageLog
+                        )
                     ]
 
             _ ->
