@@ -34,6 +34,21 @@ addChannel ch model =
     { model | channels = insert ch.name ch model.channels }
 
 
+addMessageToModel : ChannelName -> String -> Model -> Model
+addMessageToModel ch msg model =
+    { model | channels = Dict.update ch (addMessageToChannel msg) model.channels }
+
+
+addMessageToChannel : String -> Maybe Channel -> Maybe Channel
+addMessageToChannel msg maybeChannel =
+    case maybeChannel of
+        Just channel ->
+            Just { channel | messageLog = msg :: channel.messageLog }
+
+        Nothing ->
+            Nothing
+
+
 newChannel : String -> Channel
 newChannel name =
     { name = name
@@ -74,7 +89,7 @@ update msg model =
             ( addChannel (newChannel channelName) model, send websocketUrl ("/join #" ++ channelName) )
 
         ReceivedMsg channelName content ->
-            ( model, Cmd.none )
+            ( addMessageToModel channelName content model, Cmd.none )
 
         SendMsg channelName content ->
             ( model, Cmd.none )
